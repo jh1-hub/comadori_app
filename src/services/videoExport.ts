@@ -9,13 +9,26 @@ export interface ExportProgress {
   status: string;
 }
 
+function getFormattedTimestamp(): string {
+  const now = new Date();
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const year = now.getFullYear();
+  const month = pad(now.getMonth() + 1);
+  const day = pad(now.getDate());
+  const hours = pad(now.getHours());
+  const minutes = pad(now.getMinutes());
+  const seconds = pad(now.getSeconds());
+  return `${year}${month}${day}_${hours}${minutes}${seconds}`;
+}
+
 /**
  * Creates a video (WebM or MP4) from the given frames at the specified FPS.
  */
 export async function exportVideo(
   frames: FrameItem[],
   fps: number,
-  onProgress: (progress: ExportProgress) => void
+  onProgress: (progress: ExportProgress) => void,
+  filenamePrefix?: string
 ): Promise<{ blob: Blob; filename: string; mimeType: string }> {
   if (frames.length === 0) {
     throw new Error('フレームがありません');
@@ -85,10 +98,12 @@ export async function exportVideo(
   const recordingPromise = new Promise<{ blob: Blob; filename: string; mimeType: string }>((resolve, reject) => {
     recorder.onstop = () => {
       const finalBlob = new Blob(recordedChunks, { type: selectedMime });
-      const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+      const timestamp = getFormattedTimestamp();
+      const baseFilename = `komadori_${timestamp}.${ext}`;
+      const finalFilename = filenamePrefix ? `${filenamePrefix}_${baseFilename}` : baseFilename;
       resolve({
         blob: finalBlob,
-        filename: `komadori_${timestamp}.${ext}`,
+        filename: finalFilename,
         mimeType: selectedMime,
       });
     };
@@ -133,7 +148,8 @@ export async function exportVideo(
  */
 export async function exportZip(
   frames: FrameItem[],
-  onProgress: (progress: ExportProgress) => void
+  onProgress: (progress: ExportProgress) => void,
+  filenamePrefix?: string
 ): Promise<{ blob: Blob; filename: string }> {
   const zip = new JSZip();
   const folder = zip.folder('komadori_frames');
@@ -161,10 +177,12 @@ export async function exportZip(
     });
   });
 
-  const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+  const timestamp = getFormattedTimestamp();
+  const baseFilename = `komadori_frames_${timestamp}.zip`;
+  const finalFilename = filenamePrefix ? `${filenamePrefix}_${baseFilename}` : baseFilename;
   return {
     blob: content,
-    filename: `komadori_frames_${timestamp}.zip`,
+    filename: finalFilename,
   };
 }
 

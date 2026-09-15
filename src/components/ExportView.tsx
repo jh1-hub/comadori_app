@@ -12,6 +12,7 @@ import {
 import { FrameItem } from '../types';
 import { exportVideo, exportZip, triggerDownload, ExportProgress } from '../services/videoExport';
 import { ConfirmModal } from './ConfirmModal';
+import { StudentInfoExportModal } from './StudentInfoExportModal';
 
 interface ExportViewProps {
   frames: FrameItem[];
@@ -33,8 +34,24 @@ export const ExportView: React.FC<ExportViewProps> = ({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [showResetConfirm, setShowResetConfirm] = useState<boolean>(false);
 
+  // Student info prompt state before exporting
+  const [pendingExportType, setPendingExportType] = useState<'video' | 'zip' | null>(null);
+
+  // Trigger prompt modal for video export
+  const handleRequestExportVideo = () => {
+    if (frames.length === 0 || isExportingVideo || isExportingZip) return;
+    setPendingExportType('video');
+  };
+
+  // Trigger prompt modal for ZIP export
+  const handleRequestExportZip = () => {
+    if (frames.length === 0 || isExportingVideo || isExportingZip) return;
+    setPendingExportType('zip');
+  };
+
   // Export video (WebM/MP4)
-  const handleExportVideo = async () => {
+  const executeExportVideo = async (prefix?: string) => {
+    setPendingExportType(null);
     if (frames.length === 0 || isExportingVideo) return;
     try {
       setIsExportingVideo(true);
@@ -42,7 +59,7 @@ export const ExportView: React.FC<ExportViewProps> = ({
       setErrorMessage(null);
       setExportedVideoUrl(null);
 
-      const result = await exportVideo(frames, frameRate, (p) => setProgress(p));
+      const result = await exportVideo(frames, frameRate, (p) => setProgress(p), prefix);
       const url = URL.createObjectURL(result.blob);
       setExportedVideoUrl(url);
       setExportedVideoFilename(result.filename);
@@ -59,14 +76,15 @@ export const ExportView: React.FC<ExportViewProps> = ({
   };
 
   // Export ZIP of all JPEGs
-  const handleExportZip = async () => {
+  const executeExportZip = async (prefix?: string) => {
+    setPendingExportType(null);
     if (frames.length === 0 || isExportingZip) return;
     try {
       setIsExportingZip(true);
       setSuccessMessage(null);
       setErrorMessage(null);
 
-      const result = await exportZip(frames, (p) => setProgress(p));
+      const result = await exportZip(frames, (p) => setProgress(p), prefix);
       triggerDownload(result.blob, result.filename);
       setSuccessMessage(`全コマ画像ZIP「${result.filename}」をダウンロードしました！`);
     } catch (err: unknown) {
@@ -187,7 +205,7 @@ export const ExportView: React.FC<ExportViewProps> = ({
             </div>
             <button
               id="btn-export-video"
-              onClick={handleExportVideo}
+              onClick={handleRequestExportVideo}
               disabled={frames.length === 0 || isExportingVideo || isExportingZip}
               className="w-full py-3 rounded-xl bg-amber-500 hover:bg-amber-400 text-neutral-950 font-bold text-xs flex items-center justify-center gap-2 shadow-md shadow-amber-500/20 transition-all disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
             >
@@ -218,7 +236,7 @@ export const ExportView: React.FC<ExportViewProps> = ({
             </div>
             <button
               id="btn-export-zip"
-              onClick={handleExportZip}
+              onClick={handleRequestExportZip}
               disabled={frames.length === 0 || isExportingVideo || isExportingZip}
               className="w-full py-3 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-white font-bold text-xs flex items-center justify-center gap-2 border border-neutral-700 transition-all disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
             >
@@ -296,6 +314,28 @@ export const ExportView: React.FC<ExportViewProps> = ({
           onResetProject();
         }}
         onCancel={() => setShowResetConfirm(false)}
+      />
+
+      {/* Student Info Export Prompt Modal */}
+      <StudentInfoExportModal
+        isOpen={pendingExportType !== null}
+        exportType={pendingExportType || 'video'}
+        extension={pendingExportType === 'zip' ? 'zip' : 'webm'}
+        onConfirmWithInfo={(prefix) => {
+          if (pendingExportType === 'video') {
+            executeExportVideo(prefix);
+          } else if (pendingExportType === 'zip') {
+            executeExportZip(prefix);
+          }
+        }}
+        onConfirmWithoutInfo={() => {
+          if (pendingExportType === 'video') {
+            executeExportVideo();
+          } else if (pendingExportType === 'zip') {
+            executeExportZip();
+          }
+        }}
+        onCancel={() => setPendingExportType(null)}
       />
     </div>
   );

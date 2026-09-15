@@ -222,7 +222,7 @@ export async function saveProjectMeta(meta: Partial<ProjectMeta>): Promise<void>
     const store = tx.objectStore('projectMeta');
     const getReq = store.get('current');
     getReq.onsuccess = () => {
-      const existing = getReq.result || { id: 'current', frameRate: 8, title: 'コマ撮り作品' };
+      const existing = getReq.result || { id: 'current', frameRate: 4, title: 'コマ撮り作品' };
       store.put({
         ...existing,
         ...meta,

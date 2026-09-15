@@ -28,7 +28,7 @@ const MAX_FRAMES = 200;
 export default function App() {
   const [activeTab, setActiveTab] = useState<TabType>('camera');
   const [frames, setFrames] = useState<FrameItem[]>([]);
-  const [frameRate, setFrameRate] = useState<number>(8);
+  const [frameRate, setFrameRate] = useState<number>(4);
   const [soundEnabled, setSoundEnabled] = useState<boolean>(true);
   const [isSaving, setIsSaving] = useState<boolean>(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
