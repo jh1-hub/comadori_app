@@ -1,0 +1,10 @@
+{
+  "name": "コマ撮りスタジオ",
+  "description": "ブラウザ上で手軽に撮影・編集・再生できるコマ撮り（ストップモーション）動画作成アプリ。IndexedDBによる自動保存、オニオンスキン、動画書き出しに対応。",
+  "requestFramePermissions": [
+    "camera"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
