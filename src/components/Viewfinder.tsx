@@ -11,6 +11,10 @@ import {
   CameraOff,
   Sliders,
   Sparkles,
+  SwitchCamera,
+  FlipHorizontal,
+  ChevronDown,
+  Video,
 } from 'lucide-react';
 import { FrameItem } from '../types';
 import { captureVideoFrame } from '../services/imageProcessing';
@@ -30,11 +34,16 @@ export const Viewfinder: React.FC<ViewfinderProps> = ({
   maxFrames,
 }) => {
   const videoRef = useRef<HTMLVideoElement | null>(null);
-  const [stream, setStream] = useState<MediaStream | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
   const [cameraError, setCameraError] = useState<string | null>(null);
-  const [facingMode, setFacingMode] = useState<'environment' | 'user'>('environment');
   const [isCapturing, setIsCapturing] = useState<boolean>(false);
   const [flashActive, setFlashActive] = useState<boolean>(false);
+
+  // Camera device list and active selection
+  const [cameraDevices, setCameraDevices] = useState<MediaDeviceInfo[]>([]);
+  const [selectedDeviceId, setSelectedDeviceId] = useState<string>('');
+  const [showDeviceSelector, setShowDeviceSelector] = useState<boolean>(false);
+  const [isMirrored, setIsMirrored] = useState<boolean>(false);
 
   // Onion skin settings
   const [onionSkinEnabled, setOnionSkinEnabled] = useState<boolean>(true);
@@ -52,63 +61,153 @@ export const Viewfinder: React.FC<ViewfinderProps> = ({
   const previousFrame = frames.length > 0 ? frames[frames.length - 1] : null;
   const isAtLimit = frames.length >= maxFrames;
 
-  // Initialize camera stream
-  const startCamera = useCallback(async (facing: 'environment' | 'user') => {
+  // Enumerate cameras
+  const refreshCameraDevices = useCallback(async () => {
+    try {
+      if (!navigator.mediaDevices?.enumerateDevices) return;
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      const videoInputs = devices.filter((d) => d.kind === 'videoinput');
+      setCameraDevices(videoInputs);
+      return videoInputs;
+    } catch (e) {
+      console.warn('enumerateDevices error:', e);
+      return [];
+    }
+  }, []);
+
+  // Start camera with specific deviceId or fallback to environment
+  const startCamera = useCallback(async (targetDeviceId?: string) => {
     try {
       setCameraError(null);
-      if (stream) {
-        stream.getTracks().forEach((track) => track.stop());
+
+      // Stop existing tracks
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach((track) => track.stop());
+        streamRef.current = null;
       }
 
-      // Constraints for 720x480 or ideal 16:9 / 4:3 that we will crop to 3:2 (720x480)
-      const constraints: MediaStreamConstraints = {
-        audio: false,
-        video: {
-          facingMode: { ideal: facing },
-          width: { ideal: 1280 },
-          height: { ideal: 720 },
-        },
-      };
+      let constraints: MediaStreamConstraints;
 
-      const newStream = await navigator.mediaDevices.getUserMedia(constraints);
-      setStream(newStream);
+      if (targetDeviceId) {
+        constraints = {
+          audio: false,
+          video: {
+            deviceId: { exact: targetDeviceId },
+            width: { ideal: 1280 },
+            height: { ideal: 720 },
+          },
+        };
+      } else {
+        constraints = {
+          audio: false,
+          video: {
+            facingMode: { ideal: 'environment' },
+            width: { ideal: 1280 },
+            height: { ideal: 720 },
+          },
+        };
+      }
+
+      let newStream: MediaStream;
+      try {
+        newStream = await navigator.mediaDevices.getUserMedia(constraints);
+      } catch {
+        // Fallback to basic video request if exact deviceId failed
+        newStream = await navigator.mediaDevices.getUserMedia({
+          video: true,
+          audio: false,
+        });
+      }
+
+      streamRef.current = newStream;
 
       if (videoRef.current) {
         videoRef.current.srcObject = newStream;
       }
+
+      // Read active track to determine deviceId & label
+      const activeVideoTrack = newStream.getVideoTracks()[0];
+      const activeSettings = activeVideoTrack?.getSettings();
+      const currentId = activeSettings?.deviceId || targetDeviceId || '';
+      setSelectedDeviceId(currentId);
+
+      // Refresh camera list with actual labels (after permission granted)
+      const list = await refreshCameraDevices();
+      if (list && list.length > 0 && !targetDeviceId) {
+        const found = list.find((d) => d.deviceId === currentId);
+        if (found) {
+          // Check if front camera to set initial mirror state sensibly
+          const labelLower = found.label.toLowerCase();
+          const isFront =
+            labelLower.includes('front') ||
+            labelLower.includes('user') ||
+            labelLower.includes('内') ||
+            labelLower.includes('イン');
+          setIsMirrored(isFront);
+        }
+      }
     } catch (err: unknown) {
       console.error('Camera access failed:', err);
-      // Fallback without facingMode if environment fails
-      try {
-        const fallbackStream = await navigator.mediaDevices.getUserMedia({
-          video: true,
-          audio: false,
-        });
-        setStream(fallbackStream);
-        if (videoRef.current) {
-          videoRef.current.srcObject = fallbackStream;
-        }
-      } catch (fallbackErr: unknown) {
-        const msg = fallbackErr instanceof Error ? fallbackErr.message : 'カメラを起動できませんでした';
-        setCameraError(
-          `カメラへのアクセスが拒否されたか、デバイスが見つかりません。ブラウザのカメラ権限設定をご確認ください。(${msg})`
-        );
-      }
+      const msg = err instanceof Error ? err.message : 'カメラを起動できませんでした';
+      setCameraError(
+        `カメラへのアクセスが拒否されたか、デバイスが見つかりません。ブラウザのカメラ権限設定をご確認ください。(${msg})`
+      );
     }
-  }, [stream]);
+  }, [refreshCameraDevices]);
 
+  // Initial camera startup
   useEffect(() => {
-    startCamera(facingMode);
+    startCamera();
     return () => {
-      if (stream) {
-        stream.getTracks().forEach((track) => track.stop());
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach((track) => track.stop());
       }
     };
-  }, [facingMode]);
+  }, []);
 
-  // Flip camera between front and rear
-  const handleFlipCamera = () => {
-    setFacingMode((prev) => (prev === 'environment' ? 'user' : 'environment'));
+  // Switch to next camera in the list
+  const handleCycleCamera = () => {
+    if (cameraDevices.length <= 1) {
+      // If only 1 device found or not enumerated, toggle mirror or retry
+      setIsMirrored((prev) => !prev);
+      return;
+    }
+
+    const currentIndex = cameraDevices.findIndex((d) => d.deviceId === selectedDeviceId);
+    const nextIndex = (currentIndex + 1) % cameraDevices.length;
+    const nextDevice = cameraDevices[nextIndex];
+
+    setSelectedDeviceId(nextDevice.deviceId);
+
+    // Auto-detect mirror for front cameras
+    const labelLower = nextDevice.label.toLowerCase();
+    const isFront =
+      labelLower.includes('front') ||
+      labelLower.includes('user') ||
+      labelLower.includes('内') ||
+      labelLower.includes('イン');
+    setIsMirrored(isFront);
+
+    startCamera(nextDevice.deviceId);
+  };
+
+  // Direct selection of a camera
+  const handleSelectCameraDevice = (deviceId: string) => {
+    setSelectedDeviceId(deviceId);
+    setShowDeviceSelector(false);
+
+    const dev = cameraDevices.find((d) => d.deviceId === deviceId);
+    if (dev) {
+      const labelLower = dev.label.toLowerCase();
+      const isFront =
+        labelLower.includes('front') ||
+        labelLower.includes('user') ||
+        labelLower.includes('内') ||
+        labelLower.includes('イン');
+      setIsMirrored(isFront);
+    }
+
+    startCamera(deviceId);
   };
 
   // Perform actual frame capture
@@ -170,6 +269,11 @@ export const Viewfinder: React.FC<ViewfinderProps> = ({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isCapturing, isAtLimit, timerSeconds]);
 
+  const currentCameraDevice = cameraDevices.find((d) => d.deviceId === selectedDeviceId);
+  const currentCameraName =
+    currentCameraDevice?.label ||
+    (cameraDevices.length > 0 ? `カメラ ${cameraDevices.findIndex((d) => d.deviceId === selectedDeviceId) + 1}` : 'カメラ起動中');
+
   return (
     <div className="w-full flex flex-col items-center">
       {/* Viewfinder Main Stage */}
@@ -186,7 +290,7 @@ export const Viewfinder: React.FC<ViewfinderProps> = ({
             playsInline
             muted
             className={`absolute inset-0 w-full h-full object-cover transition-transform duration-300 ${
-              facingMode === 'user' ? 'scale-x-[-1]' : ''
+              isMirrored ? 'scale-x-[-1]' : ''
             }`}
           />
 
@@ -215,8 +319,8 @@ export const Viewfinder: React.FC<ViewfinderProps> = ({
               <div className="border-r border-b border-white/20"></div>
               <div className="border-r border-b border-white/20"></div>
               <div className="border-b border-white/20"></div>
-              <div className="border-r border-white/20"></div>
-              <div className="border-r border-white/20"></div>
+              <div className="border-r border-b border-white/20"></div>
+              <div className="border-r border-b border-white/20"></div>
               <div></div>
             </div>
           )}
@@ -246,8 +350,8 @@ export const Viewfinder: React.FC<ViewfinderProps> = ({
                 {cameraError}
               </p>
               <button
-                onClick={() => startCamera(facingMode)}
-                className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-neutral-950 font-bold text-xs flex items-center gap-1.5 transition-colors"
+                onClick={() => startCamera(selectedDeviceId)}
+                className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-neutral-950 font-bold text-xs flex items-center gap-1.5 transition-colors cursor-pointer"
               >
                 <RefreshCw className="w-4 h-4" />
                 <span>カメラを再起動する</span>
@@ -260,7 +364,7 @@ export const Viewfinder: React.FC<ViewfinderProps> = ({
             <div className="flex items-center gap-2">
               <span className="bg-black/60 backdrop-blur-md px-2.5 py-1 rounded-md text-[11px] font-mono text-neutral-300 border border-white/10 flex items-center gap-1.5">
                 <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>
-                720 × 480 (3:2)
+                720 × 480
               </span>
 
               {onionSkinEnabled && (
@@ -281,9 +385,9 @@ export const Viewfinder: React.FC<ViewfinderProps> = ({
           </div>
         </div>
 
-        {/* Viewfinder Controls Toolbar (Onion skin toggle, Grid toggle, Flip, Timer) */}
+        {/* Viewfinder Controls Toolbar */}
         <div className="mt-3 flex flex-wrap items-center justify-between gap-2 px-1">
-          {/* Left Controls: Onion Skin & Guides */}
+          {/* Left Controls: Onion Skin, Grid, Timer */}
           <div className="flex items-center gap-2">
             {/* Onion Skin Toggle */}
             <div className="relative">
@@ -373,17 +477,82 @@ export const Viewfinder: React.FC<ViewfinderProps> = ({
             </button>
           </div>
 
-          {/* Right Controls: Camera flip */}
+          {/* Right Controls: Real Camera Selection & Mirror Switch */}
           <div className="flex items-center gap-2">
+            {/* Mirror Toggle Button */}
             <button
-              id="btn-camera-flip"
-              onClick={handleFlipCamera}
-              className="px-3 py-2 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-neutral-300 hover:text-white border border-neutral-700 text-xs flex items-center gap-1.5 transition-colors"
-              title="カメラの向きを切り替え (外カメ / 内カメ)"
+              id="btn-toggle-mirror"
+              onClick={() => setIsMirrored((prev) => !prev)}
+              className={`p-2 rounded-xl border text-xs flex items-center gap-1.5 transition-colors ${
+                isMirrored
+                  ? 'bg-neutral-800 text-amber-400 border-amber-500/40'
+                  : 'bg-neutral-800/60 text-neutral-400 border-neutral-700/60 hover:text-white'
+              }`}
+              title={isMirrored ? '左右反転中 (クリックで通常表示)' : '通常表示 (クリックで左右反転)'}
             >
-              <RefreshCw className="w-3.5 h-3.5" />
-              <span>{facingMode === 'environment' ? '背面カメラ' : '前面カメラ'}</span>
+              <FlipHorizontal className="w-4 h-4" />
+              <span className="hidden md:inline">{isMirrored ? '反転ON' : '反転OFF'}</span>
             </button>
+
+            {/* Camera Switcher Cycle Button */}
+            <button
+              id="btn-camera-cycle"
+              onClick={handleCycleCamera}
+              className="px-3 py-2 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 text-xs font-semibold flex items-center gap-1.5 transition-colors"
+              title="カメラを切り替える (別のカメラデバイスへ変更)"
+            >
+              <SwitchCamera className="w-4 h-4 text-amber-400" />
+              <span>カメラ切替</span>
+              {cameraDevices.length > 1 && (
+                <span className="text-[10px] bg-amber-400 text-neutral-950 font-bold px-1 rounded-full">
+                  {cameraDevices.length}
+                </span>
+              )}
+            </button>
+
+            {/* Camera Device Dropdown Selector */}
+            {cameraDevices.length > 1 && (
+              <div className="relative">
+                <button
+                  id="btn-camera-select-dropdown"
+                  onClick={() => setShowDeviceSelector((prev) => !prev)}
+                  className="px-2.5 py-2 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-neutral-300 hover:text-white border border-neutral-700 text-xs flex items-center gap-1.5 transition-colors max-w-[160px] truncate"
+                  title="カメラを選択"
+                >
+                  <Video className="w-3.5 h-3.5 flex-shrink-0 text-amber-400" />
+                  <span className="truncate">{currentCameraName}</span>
+                  <ChevronDown className="w-3 h-3 flex-shrink-0" />
+                </button>
+
+                {showDeviceSelector && (
+                  <div className="absolute right-0 top-full mt-2 w-64 p-2 bg-neutral-900/95 backdrop-blur-md rounded-2xl border border-neutral-700 shadow-2xl z-40">
+                    <div className="text-[11px] font-bold text-neutral-400 px-2 py-1 border-b border-neutral-800 mb-1">
+                      利用可能なカメラデバイス
+                    </div>
+                    <div className="flex flex-col gap-1 max-h-56 overflow-y-auto">
+                      {cameraDevices.map((device, idx) => {
+                        const isSelected = device.deviceId === selectedDeviceId;
+                        const label = device.label || `カメラ ${idx + 1}`;
+                        return (
+                          <button
+                            key={device.deviceId || idx}
+                            onClick={() => handleSelectCameraDevice(device.deviceId)}
+                            className={`w-full text-left px-3 py-2 rounded-xl text-xs flex items-center justify-between transition-colors ${
+                              isSelected
+                                ? 'bg-amber-500 text-neutral-950 font-bold'
+                                : 'text-neutral-300 hover:bg-neutral-800'
+                            }`}
+                          >
+                            <span className="truncate">{label}</span>
+                            {isSelected && <span className="text-[10px] font-mono">使用中</span>}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
 

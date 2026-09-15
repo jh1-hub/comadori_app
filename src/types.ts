@@ -12,4 +12,5 @@ export interface ProjectMeta {
   title: string;
 }
 
-export type ActiveTab = 'camera' | 'edit' | 'playback' | 'export';
+export type TabType = 'camera' | 'edit' | 'playback' | 'export';
+export type ActiveTab = TabType;

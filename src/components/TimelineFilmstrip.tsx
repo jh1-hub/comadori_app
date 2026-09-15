@@ -1,5 +1,5 @@
 import React, { useRef, useEffect } from 'react';
-import { Plus, ImagePlus, ArrowRight, Trash2 } from 'lucide-react';
+import { Plus, ImagePlus, ArrowRight, Trash2, Eye } from 'lucide-react';
 import { FrameItem } from '../types';
 
 interface TimelineFilmstripProps {
@@ -33,16 +33,15 @@ export const TimelineFilmstrip: React.FC<TimelineFilmstripProps> = ({
     for (let i = 0; i < files.length; i++) {
       onUploadImage(files[i]);
     }
-    // Reset input
     e.target.value = '';
   };
 
   return (
-    <div className="w-full max-w-4xl mt-6 bg-neutral-900/80 backdrop-blur rounded-2xl border border-neutral-800 p-3 shadow-lg">
+    <div className="w-full max-w-4xl mt-6 bg-neutral-900/90 backdrop-blur rounded-2xl border border-neutral-800 p-3 shadow-lg">
       <div className="flex items-center justify-between mb-2.5 px-1">
         <div className="flex items-center gap-2">
           <span className="font-bold text-xs sm:text-sm text-neutral-200">
-            フィルムストリップ（タイムライン）
+            タイムライン（コマ一覧）
           </span>
           <span className="text-[11px] text-neutral-400">
             {frames.length === 0 ? '撮影したコマがここに並びます' : `${frames.length}コマ`}
@@ -62,7 +61,7 @@ export const TimelineFilmstrip: React.FC<TimelineFilmstripProps> = ({
           <button
             id="btn-upload-image-strip"
             onClick={() => fileInputRef.current?.click()}
-            className="px-2.5 py-1.5 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-neutral-300 hover:text-white border border-neutral-700 text-xs flex items-center gap-1.5 transition-colors"
+            className="px-2.5 py-1.5 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-neutral-300 hover:text-white border border-neutral-700 text-xs flex items-center gap-1.5 transition-colors cursor-pointer"
             title="画像を読み込んでコマに追加 (720x480に自動トリミング)"
           >
             <ImagePlus className="w-3.5 h-3.5 text-amber-400" />
@@ -74,9 +73,9 @@ export const TimelineFilmstrip: React.FC<TimelineFilmstripProps> = ({
             <button
               id="btn-open-edit-strip"
               onClick={onOpenEditTab}
-              className="px-2.5 py-1.5 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-neutral-300 hover:text-white border border-neutral-700 text-xs flex items-center gap-1 transition-colors"
+              className="px-3 py-1.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 text-xs font-semibold flex items-center gap-1 transition-colors cursor-pointer"
             >
-              <span>並べ替え・一覧</span>
+              <span>並べ替え・詳細</span>
               <ArrowRight className="w-3.5 h-3.5" />
             </button>
           )}
@@ -102,7 +101,7 @@ export const TimelineFilmstrip: React.FC<TimelineFilmstripProps> = ({
             return (
               <div
                 key={frame.id}
-                className={`group relative flex-shrink-0 w-28 sm:w-32 aspect-[3/2] rounded-xl overflow-hidden border-2 transition-all cursor-pointer ${
+                className={`group relative flex-shrink-0 w-28 sm:w-32 aspect-[3/2] rounded-xl overflow-hidden border-2 transition-all cursor-pointer select-none ${
                   isLast
                     ? 'border-amber-400 ring-2 ring-amber-400/20 shadow-md shadow-amber-500/10'
                     : 'border-neutral-800 hover:border-neutral-600'
@@ -117,27 +116,27 @@ export const TimelineFilmstrip: React.FC<TimelineFilmstripProps> = ({
                 />
 
                 {/* Frame Index Badge */}
-                <div className="absolute top-1 left-1 bg-black/70 backdrop-blur-xs px-1.5 py-0.5 rounded text-[10px] font-mono font-bold text-neutral-200">
+                <div className="absolute top-1 left-1 bg-black/75 backdrop-blur-xs px-1.5 py-0.5 rounded text-[10px] font-mono font-bold text-neutral-200 border border-white/10">
                   #{index + 1}
                 </div>
 
                 {isLast && (
-                  <div className="absolute bottom-1 right-1 bg-amber-500 text-neutral-950 font-bold text-[9px] px-1.5 py-0.2 rounded">
+                  <div className="absolute bottom-1 right-1 bg-amber-500 text-neutral-950 font-bold text-[9px] px-1.5 py-0.2 rounded shadow">
                     最新
                   </div>
                 )}
 
-                {/* Quick Delete Hover Button */}
+                {/* Delete button (accessible on touch, clear tooltip) */}
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
                     onDeleteFrame(frame.id);
                   }}
-                  className="absolute top-1 right-1 p-1 bg-neutral-950/80 hover:bg-rose-600 text-neutral-300 hover:text-white rounded opacity-0 group-hover:opacity-100 transition-opacity"
-                  title="このコマを削除"
-                  aria-label="コマ削除"
+                  className="absolute top-1 right-1 p-1.5 bg-black/75 hover:bg-rose-600 text-neutral-300 hover:text-white rounded-lg border border-white/10 opacity-90 sm:opacity-0 sm:group-hover:opacity-100 transition-all cursor-pointer shadow"
+                  title={`コマ #${index + 1} を削除`}
+                  aria-label={`コマ #${index + 1} を削除`}
                 >
-                  <Trash2 className="w-3 h-3" />
+                  <Trash2 className="w-3 h-3 text-rose-400 hover:text-white" />
                 </button>
               </div>
             );

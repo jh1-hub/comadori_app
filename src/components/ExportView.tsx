@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { FrameItem } from '../types';
 import { exportVideo, exportZip, triggerDownload, ExportProgress } from '../services/videoExport';
+import { ConfirmModal } from './ConfirmModal';
 
 interface ExportViewProps {
   frames: FrameItem[];
@@ -29,6 +30,8 @@ export const ExportView: React.FC<ExportViewProps> = ({
   const [exportedVideoUrl, setExportedVideoUrl] = useState<string | null>(null);
   const [exportedVideoFilename, setExportedVideoFilename] = useState<string>('');
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [showResetConfirm, setShowResetConfirm] = useState<boolean>(false);
 
   // Export video (WebM/MP4)
   const handleExportVideo = async () => {
@@ -36,6 +39,7 @@ export const ExportView: React.FC<ExportViewProps> = ({
     try {
       setIsExportingVideo(true);
       setSuccessMessage(null);
+      setErrorMessage(null);
       setExportedVideoUrl(null);
 
       const result = await exportVideo(frames, frameRate, (p) => setProgress(p));
@@ -47,7 +51,7 @@ export const ExportView: React.FC<ExportViewProps> = ({
     } catch (err: unknown) {
       console.error('Video export error:', err);
       const msg = err instanceof Error ? err.message : '不明なエラー';
-      alert(`動画の書き出しに失敗しました: ${msg}`);
+      setErrorMessage(`動画の書き出しに失敗しました: ${msg}`);
     } finally {
       setIsExportingVideo(false);
       setProgress(null);
@@ -60,6 +64,7 @@ export const ExportView: React.FC<ExportViewProps> = ({
     try {
       setIsExportingZip(true);
       setSuccessMessage(null);
+      setErrorMessage(null);
 
       const result = await exportZip(frames, (p) => setProgress(p));
       triggerDownload(result.blob, result.filename);
@@ -67,24 +72,18 @@ export const ExportView: React.FC<ExportViewProps> = ({
     } catch (err: unknown) {
       console.error('ZIP export error:', err);
       const msg = err instanceof Error ? err.message : '不明なエラー';
-      alert(`ZIPの書き出しに失敗しました: ${msg}`);
+      setErrorMessage(`ZIPの書き出しに失敗しました: ${msg}`);
     } finally {
       setIsExportingZip(false);
       setProgress(null);
     }
   };
 
-  // Reset project with confirmation
-  const handleResetConfirm = () => {
+  const handleResetClick = () => {
     if (frames.length === 0) {
       onResetProject();
-      return;
-    }
-    const confirmed = window.confirm(
-      '現在のプロジェクトのすべてのコマ画像と保存データを消去して、新しいプロジェクトを開始しますか？\n（必要な画像は事前に動画やZIPで書き出しておいてください）'
-    );
-    if (confirmed) {
-      onResetProject();
+    } else {
+      setShowResetConfirm(true);
     }
   };
 
@@ -162,6 +161,14 @@ export const ExportView: React.FC<ExportViewProps> = ({
           <div className="bg-emerald-950/60 border border-emerald-800/80 rounded-xl p-4 mb-6 flex items-center gap-3 text-emerald-300 text-xs">
             <CheckCircle2 className="w-5 h-5 flex-shrink-0 text-emerald-400" />
             <span>{successMessage}</span>
+          </div>
+        )}
+
+        {/* Error Alert */}
+        {errorMessage && (
+          <div className="bg-rose-950/60 border border-rose-800/80 rounded-xl p-4 mb-6 flex items-center gap-3 text-rose-300 text-xs">
+            <AlertTriangle className="w-5 h-5 flex-shrink-0 text-rose-400" />
+            <span>{errorMessage}</span>
           </div>
         )}
 
@@ -267,14 +274,29 @@ export const ExportView: React.FC<ExportViewProps> = ({
 
           <button
             id="btn-reset-project"
-            onClick={handleResetConfirm}
-            className="px-4 py-2 rounded-xl bg-neutral-800 hover:bg-rose-950/60 text-neutral-300 hover:text-rose-400 border border-neutral-700 hover:border-rose-800/80 text-xs font-medium flex items-center gap-1.5 transition-colors whitespace-nowrap"
+            onClick={handleResetClick}
+            className="px-4 py-2 rounded-xl bg-neutral-800 hover:bg-rose-950/60 text-neutral-300 hover:text-rose-400 border border-neutral-700 hover:border-rose-800/80 text-xs font-medium flex items-center gap-1.5 transition-colors whitespace-nowrap cursor-pointer"
           >
             <RotateCcw className="w-3.5 h-3.5" />
             <span>プロジェクトを初期化する</span>
           </button>
         </div>
       </div>
+
+      {/* Reset Confirmation Modal */}
+      <ConfirmModal
+        isOpen={showResetConfirm}
+        title="プロジェクトを初期化しますか？"
+        message="現在のプロジェクトのすべてのコマ画像と保存データを完全に消去して、新しいプロジェクトを開始します。\n（必要な画像は事前に動画やZIPで書き出しておいてください）"
+        confirmLabel="はい、すべて初期化する"
+        cancelLabel="キャンセル"
+        isDestructive={true}
+        onConfirm={() => {
+          setShowResetConfirm(false);
+          onResetProject();
+        }}
+        onCancel={() => setShowResetConfirm(false)}
+      />
     </div>
   );
 };

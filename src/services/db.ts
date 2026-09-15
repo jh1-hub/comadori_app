@@ -1,4 +1,4 @@
-import { ProjectMeta } from '../types';
+import { ProjectMeta, FrameItem } from '../types';
 
 const DB_NAME = 'komadori_db';
 const DB_VERSION = 1;
@@ -8,6 +8,25 @@ export interface StoredFrameRecord {
   order: number;
   image: Blob;
   createdAt: number;
+}
+
+export async function loadSavedFrames(): Promise<FrameItem[]> {
+  const records = await getAllStoredFrames();
+  return records.map((rec) => ({
+    id: rec.id!,
+    order: rec.order,
+    blob: rec.image,
+    url: URL.createObjectURL(rec.image),
+    createdAt: rec.createdAt,
+  }));
+}
+
+export async function deleteLastFrame(lastIndex: number): Promise<void> {
+  const records = await getAllStoredFrames();
+  const lastRecord = records.find((r) => r.order === lastIndex);
+  if (lastRecord && lastRecord.id !== undefined) {
+    await deleteSingleFrame(lastRecord.id);
+  }
 }
 
 export function openDatabase(): Promise<IDBDatabase> {
@@ -80,28 +99,26 @@ export async function deleteSingleFrame(frameId: number): Promise<void> {
     const frameStore = tx.objectStore('frames');
     const metaStore = tx.objectStore('projectMeta');
 
-    const delReq = frameStore.delete(frameId);
-    delReq.onsuccess = () => {
-      // Re-order remaining frames
-      const getAllReq = frameStore.getAll();
-      getAllReq.onsuccess = () => {
-        const list = (getAllReq.result as StoredFrameRecord[]) || [];
-        list.sort((a, b) => a.order - b.order);
-        list.forEach((item, index) => {
-          if (item.order !== index) {
-            item.order = index;
-            frameStore.put(item);
-          }
-        });
-        metaStore.put({
-          id: 'current',
-          lastUpdated: Date.now(),
-        });
-        resolve();
-      };
-      getAllReq.onerror = () => resolve();
+    frameStore.delete(frameId);
+
+    const getAllReq = frameStore.getAll();
+    getAllReq.onsuccess = () => {
+      const list = (getAllReq.result as StoredFrameRecord[]) || [];
+      list.sort((a, b) => a.order - b.order);
+      list.forEach((item, index) => {
+        if (item.order !== index) {
+          item.order = index;
+          frameStore.put(item);
+        }
+      });
+      metaStore.put({
+        id: 'current',
+        lastUpdated: Date.now(),
+      });
     };
-    delReq.onerror = () => reject(delReq.error);
+
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
   });
 }
 
@@ -117,12 +134,12 @@ export async function deleteMultipleStoredFrames(frameIds: number[]): Promise<vo
     getAllReq.onsuccess = () => {
       const list = (getAllReq.result as StoredFrameRecord[]) || [];
       list.forEach((item) => {
-        if (item.id && idsSet.has(item.id)) {
+        if (item.id !== undefined && idsSet.has(item.id)) {
           frameStore.delete(item.id);
         }
       });
 
-      const remaining = list.filter((item) => item.id && !idsSet.has(item.id));
+      const remaining = list.filter((item) => item.id !== undefined && !idsSet.has(item.id));
       remaining.sort((a, b) => a.order - b.order);
       remaining.forEach((item, index) => {
         if (item.order !== index) {
@@ -135,9 +152,10 @@ export async function deleteMultipleStoredFrames(frameIds: number[]): Promise<vo
         id: 'current',
         lastUpdated: Date.now(),
       });
-      resolve();
     };
-    getAllReq.onerror = () => reject(getAllReq.error);
+
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
   });
 }
 
@@ -168,9 +186,10 @@ export async function updateFramesOrdering(orderedIds: number[]): Promise<void> 
         id: 'current',
         lastUpdated: Date.now(),
       });
-      resolve();
     };
-    getAllReq.onerror = () => reject(getAllReq.error);
+
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
   });
 }
 
