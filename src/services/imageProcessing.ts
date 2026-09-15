@@ -1,11 +1,19 @@
 export const TARGET_WIDTH = 720;
 export const TARGET_HEIGHT = 480;
 
+export interface CaptureFrameOptions {
+  mirrorH?: boolean;
+  mirrorV?: boolean;
+}
+
 /**
  * Captures the current frame from a video element, scales and center-crops it to exactly 720x480,
- * and returns it as a JPEG Blob.
+ * with optional horizontal and vertical mirroring, and returns it as a JPEG Blob.
  */
-export async function captureVideoFrame(video: HTMLVideoElement): Promise<Blob> {
+export async function captureVideoFrame(
+  video: HTMLVideoElement,
+  options?: CaptureFrameOptions
+): Promise<Blob> {
   const canvas = document.createElement('canvas');
   canvas.width = TARGET_WIDTH;
   canvas.height = TARGET_HEIGHT;
@@ -36,7 +44,18 @@ export async function captureVideoFrame(video: HTMLVideoElement): Promise<Blob> 
     sy = (vHeight - sHeight) / 2;
   }
 
+  ctx.save();
+  // Apply horizontal and vertical flip if requested
+  const mirrorH = !!options?.mirrorH;
+  const mirrorV = !!options?.mirrorV;
+
+  if (mirrorH || mirrorV) {
+    ctx.translate(mirrorH ? TARGET_WIDTH : 0, mirrorV ? TARGET_HEIGHT : 0);
+    ctx.scale(mirrorH ? -1 : 1, mirrorV ? -1 : 1);
+  }
+
   ctx.drawImage(video, sx, sy, sWidth, sHeight, 0, 0, TARGET_WIDTH, TARGET_HEIGHT);
+  ctx.restore();
 
   return new Promise((resolve, reject) => {
     canvas.toBlob(
