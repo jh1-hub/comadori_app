@@ -6,6 +6,7 @@ export interface StudentInfo {
   classRoom: string;
   number: string;
   name: string;
+  title: string;
 }
 
 interface StudentInfoExportModalProps {
@@ -24,6 +25,7 @@ export function buildStudentPrefix(info: StudentInfo): string {
   const cleanClass = info.classRoom.trim();
   const cleanNum = info.number.trim();
   const cleanName = info.name.trim();
+  const cleanTitle = info.title.trim();
 
   let classPart = '';
   if (cleanGrade) {
@@ -45,6 +47,11 @@ export function buildStudentPrefix(info: StudentInfo): string {
     const sanitizedName = cleanName.replace(/[\\/:*?"<>|]/g, '').replace(/\s+/g, ' ');
     parts.push(sanitizedName);
   }
+  if (cleanTitle) {
+    // Sanitize any invalid filename characters
+    const sanitizedTitle = cleanTitle.replace(/[\\/:*?"<>|]/g, '').replace(/\s+/g, ' ');
+    parts.push(sanitizedTitle);
+  }
 
   return parts.join('_');
 }
@@ -62,6 +69,7 @@ export const StudentInfoExportModal: React.FC<StudentInfoExportModalProps> = ({
     classRoom: '',
     number: '',
     name: '',
+    title: '',
   });
 
   // Load saved student info on open
@@ -76,6 +84,7 @@ export const StudentInfoExportModal: React.FC<StudentInfoExportModalProps> = ({
             classRoom: parsed.classRoom || '',
             number: parsed.number || '',
             name: parsed.name || '',
+            title: parsed.title || '',
           });
         }
       } catch (e) {
@@ -93,7 +102,8 @@ export const StudentInfoExportModal: React.FC<StudentInfoExportModalProps> = ({
     studentInfo.grade.trim() ||
     studentInfo.classRoom.trim() ||
     studentInfo.number.trim() ||
-    studentInfo.name.trim()
+    studentInfo.name.trim() ||
+    studentInfo.title.trim()
   );
 
   const handleExportWithInfo = () => {
@@ -107,7 +117,7 @@ export const StudentInfoExportModal: React.FC<StudentInfoExportModalProps> = ({
   };
 
   const handleClearInfo = () => {
-    setStudentInfo({ grade: '', classRoom: '', number: '', name: '' });
+    setStudentInfo({ grade: '', classRoom: '', number: '', name: '', title: '' });
     try {
       localStorage.removeItem(STORAGE_KEY);
     } catch {
@@ -126,10 +136,10 @@ export const StudentInfoExportModal: React.FC<StudentInfoExportModalProps> = ({
             </div>
             <div>
               <h3 className="font-bold text-white text-base">
-                ファイル名に年・組・番・氏名を入力しますか？
+                ファイル名に年・組・番・氏名・作品タイトルを入力しますか？
               </h3>
               <p className="text-xs text-neutral-400 mt-0.5">
-                学校の提出用などに、ファイル名の先頭にお名前や学年を追加できます。
+                学校の提出用などに、ファイル名の先頭にお名前や作品タイトルを追加できます。
               </p>
             </div>
           </div>
@@ -228,6 +238,20 @@ export const StudentInfoExportModal: React.FC<StudentInfoExportModalProps> = ({
             />
           </div>
 
+          {/* 作品タイトル */}
+          <div>
+            <label className="block text-xs font-semibold text-neutral-300 mb-1.5">
+              作品タイトル
+            </label>
+            <input
+              type="text"
+              value={studentInfo.title}
+              onChange={(e) => setStudentInfo((prev) => ({ ...prev, title: e.target.value }))}
+              placeholder="例: 不思議な冒険"
+              className="w-full bg-neutral-800 border border-neutral-700 rounded-xl px-3 py-2 text-sm text-white placeholder-neutral-500 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500"
+            />
+          </div>
+
           {/* Filename Preview Box */}
           <div className="bg-neutral-950 p-3.5 rounded-xl border border-neutral-800">
             <div className="flex items-center justify-between mb-1.5">
@@ -267,7 +291,7 @@ export const StudentInfoExportModal: React.FC<StudentInfoExportModalProps> = ({
             className="px-5 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-neutral-950 text-xs font-bold shadow-md shadow-amber-500/20 flex items-center justify-center gap-1.5 transition-all cursor-pointer"
           >
             <Download className="w-4 h-4" />
-            <span>{hasInput ? '年・組・番・氏名を入れて書き出す' : 'このまま書き出す'}</span>
+            <span>{hasInput ? '年・組・番・氏名・作品タイトルを入れて書き出す' : 'このまま書き出す'}</span>
           </button>
         </div>
       </div>
