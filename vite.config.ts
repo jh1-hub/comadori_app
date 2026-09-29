@@ -7,6 +7,15 @@ export default defineConfig(() => {
   return {
     base: './',
     plugins: [react(), tailwindcss()],
+    build: {
+      rollupOptions: {
+        output: {
+          entryFileNames: 'assets/index.js',
+          chunkFileNames: 'assets/[name].js',
+          assetFileNames: 'assets/[name].[ext]',
+        },
+      },
+    },
     resolve: {
       alias: {
         '@': path.resolve(__dirname, '.'),

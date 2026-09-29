@@ -15,7 +15,20 @@
   </head>
   <body class="bg-neutral-900 text-neutral-100 antialiased selection:bg-amber-500 selection:text-white">
     <div id="root"></div>
-    <script type="module" src="/src/main.tsx"></script>
+    <script
+      type="module"
+      src="/src/main.tsx"
+      onerror="
+        var l = document.createElement('link');
+        l.rel = 'stylesheet';
+        l.href = './dist/assets/index.css';
+        document.head.appendChild(l);
+        var s = document.createElement('script');
+        s.type = 'module';
+        s.src = './dist/assets/index.js';
+        document.body.appendChild(s);
+      "
+    ></script>
   </body>
 </html>
 
